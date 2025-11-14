@@ -13,7 +13,7 @@ jobs:
       OPENWRT_REPO: https://github.com/openwrt/openwrt.git
       SBWML_BUILDER_REPO: https://github.com/sbwml/builder.git
       CONFIG_PATH: files/.config
-      MAKE_JOBS: 2   # 推荐 -j2 稳定性更好；如你希望更快可改为 $(nproc)
+      MAKE_JOBS: 2
       SANITIZER_NAME: sanitize-config.sh
 
     steps:
@@ -25,11 +25,9 @@ jobs:
       - name: Install build deps (including pyelftools)
         run: |
           sudo apt-get update
-          sudo apt-get install -y \
-            build-essential libncurses5-dev gawk flex git gettext \
-            libssl-dev xsltproc wget unzip python3 python3-distutils \
-            python3-setuptools python3-pyelftools \
-            zlib1g-dev file subversion swig ca-certificates -y
+          sudo apt-get install -y build-essential libncurses5-dev gawk flex git gettext \
+            libssl-dev xsltproc wget unzip python3 python3-distutils python3-setuptools \
+            python3-pyelftools zlib1g-dev file subversion swig ca-certificates
 
       - name: Setup swap (helps avoid OOM)
         run: |
@@ -167,7 +165,6 @@ EOF
 
       - name: (Optional) Copy sbwml customizations into openwrt if exists
         run: |
-          # 如果想强制使用 sbwml 的 feeds/patch 等，把它们从 sbwml_builder 复制进 openwrt
           if [ -d sbwml_builder/openwrt_custom ]; then
             cp -r sbwml_builder/openwrt_custom/* openwrt/ || true
             echo "Copied sbwml custom files to openwrt/"
@@ -194,7 +191,6 @@ EOF
 
       - name: Build OpenWrt (make)
         working-directory: openwrt
-        # 使用较低并行数以降低 OOM/被 killed 的概率；如你有更大 runner 可改为 -j$(nproc)
         run: |
           make -j${{ env.MAKE_JOBS }} V=s 2>&1 | tee build.log
         timeout-minutes: 600
@@ -204,7 +200,7 @@ EOF
         run: |
           echo "==== ls -la openwrt/bin ===="
           ls -la bin || true
-          echo "==== find openwrt/bin depth=5 (files) ===="
+          echo "==== find openwrt/bin depth=6 (files) ===="
           find bin -maxdepth 6 -type f -print || true
           echo "==== full tree (top 4 levels) ===="
           find . -maxdepth 4 -print || true
