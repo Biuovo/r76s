@@ -1,4 +1,4 @@
-name: Build r76s OpenWrt (nikki + docker + frpc + tailscale)
+name: Build r76s OpenWrt (minimal, nikki+docker+frpc+tailscale)
 
 on:
   workflow_dispatch:
@@ -13,73 +13,54 @@ jobs:
       OPENWRT_REPO: https://github.com/openwrt/openwrt.git
       CONFIG_PATH: files/.config
       MAKE_JOBS: 2
-      SANITIZER_NAME: sanitize-config.sh
 
     steps:
-      - name: Checkout repo
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0
 
-      - name: Install build deps
+      - name: Install build dependencies
         run: |
           sudo apt-get update
-          sudo apt-get install -y build-essential libncurses5-dev gawk flex git gettext libssl-dev xsltproc wget unzip \
-            python3 python3-distutils python3-setuptools python3-pyelftools \
-            zlib1g-dev file subversion swig ca-certificates
+          sudo apt-get install -y \
+            build-essential libncurses5-dev gawk flex git gettext \
+            libssl-dev xsltproc wget unzip python3 python3-distutils \
+            python3-setuptools python3-pyelftools zlib1g-dev file \
+            subversion swig ca-certificates
 
-      - name: Setup swap
+      - name: Setup swap (optional)
         run: |
           sudo fallocate -l 8G /swapfile || true
           sudo chmod 600 /swapfile || true
           sudo mkswap /swapfile || true
           sudo swapon /swapfile || true
+          echo "swap enabled"
 
       - name: Clone OpenWrt
-        run: git clone --depth 1 $OPENWRT_REPO openwrt
+        run: |
+          git clone --depth 1 $OPENWRT_REPO openwrt
 
-      - name: Copy .config
+      - name: Copy files/.config to openwrt
         run: |
           if [ ! -f "${{ env.CONFIG_PATH }}" ]; then
-            echo "ERROR: files/.config 不存在！你必须提供设备的 .config 文件"
+            echo "ERROR: ${CONFIG_PATH} not found. Please add files/.config"
             exit 1
           fi
           cp "${{ env.CONFIG_PATH }}" openwrt/.config
+          echo "Copied ${CONFIG_PATH} -> openwrt/.config"
 
-      - name: Add custom feeds (nikki frp tailscale)
+      - name: Add custom feeds (nikki / frp / luci-frpc / tailscale)
         working-directory: openwrt
         run: |
-          echo "src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main" >> feeds.conf.default
-          echo "src-git frp https://github.com/kuoruan/openwrt-frp.git;main" >> feeds.conf.default
-          echo "src-git luci-frpc https://github.com/kuoruan/luci-app-frpc.git;main" >> feeds.conf.default
-          echo "src-git tailscale https://github.com/lanrat/openwrt-tailscale-repo.git;main" >> feeds.conf.default
+          echo 'src-git nikki https://github.com/nikkinikki-org/OpenWrt-nikki.git;main' >> feeds.conf.default
+          echo 'src-git frp https://github.com/kuoruan/openwrt-frp.git;main' >> feeds.conf.default
+          echo 'src-git luci-frpc https://github.com/kuoruan/luci-app-frpc.git;main' >> feeds.conf.default
+          echo 'src-git tailscale https://github.com/lanrat/openwrt-tailscale-repo.git;main' >> feeds.conf.default
+          echo "feeds.conf.default content:"
+          cat feeds.conf.default
 
-      - name: Write sanitizer script
-        working-directory: openwrt
-        run: |
-          cat > ${{ env.SANITIZER_NAME }} << 'EOF'
-IyEvdXNyL2Jpbi9lbnYgYmFzaApzZXQgLWV1byBwaXBlZmFpbApDRkc9Ii5jb25maWciCkJBQ0tVUD0i
-LmNvbmZpZy5vcmlnIgpLRUVQX1BBVEVSTlM9KApJQ09ORklHX1RBUkdFTF8KIklDT05GSUdfVEFSR0VU
-X0RFVklDRV8iCiJcVkVSU0lPTiIKKQpSRVFVSVJFRF9QQUNLQUdFUz0oCiAgIkNPTkZJR19QQUNLQUdF
-X25pa2tpPXkiCiAgIkNPTkZJR19QQUNLQUdFX2x1Y2ktYXBwLW5pa2tpPXkiCiAgIkNPTkZJR19QQUNL
-QUdFX2x1Y2ktaTE4bi1uaWtraS16aC1jbj15IgogICJDT05G SUdfUEFDS0FHRV9mcnA9eSIKICAiQ09O
-RklHX1BBQ0tBR0VfbHVjaS1hcHAtZnJwYz15IgopCkRPQ0tFUl9QQUNLQUdFUz0oCiAgIkNPTkZJR19Q
-QUNLQUdFX2RvY2tlcj15IgogICJDT05G SUdfUEFDS0FHRV9kb2NrZXJkPXkiCiAgIkNPTkZJR19QQUNL
-QUdFX2RvY2tlci1jb21wb3NlPXkiCikKVEFJTFNDQUxFX1BBQ0tBR0VTPQoKSUYoWyAtZiAiJENGRyIg
-XTspOyB0aGVuCiAgY3AgLS1wcmVzZXJ2ZSAiJENGRyIgIiRCQUNLVVAiCmZpCgpUTVBDRkc9IiRDRkcu
-dG1wIgpiYXNoIC1jICJjYXQgPC9kZXZfdnVsbCBub3RMIGZpsCI+ICRU TVBDRkcKCmhlYWQgLWxhIDIw
-MCAkVEN GRyB8fCB0cnVlCk1WICRU TVBDRmcgIiRDRkciCgo=
-EOF
-
-          base64 -d ${{ env.SANITIZER_NAME }} > tmp.sh
-          mv tmp.sh ${{ env.SANITIZER_NAME }}
-          chmod +x ${{ env.SANITIZER_NAME }}
-
-      - name: Run sanitizer
-        working-directory: openwrt
-        run: ./${{ env.SANITIZER_NAME }}
-
-      - name: Update & Install feeds
+      - name: Update and install feeds
         working-directory: openwrt
         run: |
           ./scripts/feeds update -a
@@ -89,24 +70,32 @@ EOF
         working-directory: openwrt
         run: make defconfig
 
-      - name: Build firmware
-        working-directory: openwrt
-        run: make -j${{ env.MAKE_JOBS }} V=s 2>&1 | tee build.log
-
-      - name: List build output
+      - name: Build OpenWrt (make)
         working-directory: openwrt
         run: |
-          echo "--- openwrt/bin ---"
-          find bin -type f || true
-          cp build.log ../build.log
+          make -j${{ env.MAKE_JOBS }} V=s 2>&1 | tee build.log
 
-      - name: Upload build logs
+      - name: List build outputs and save listing
+        working-directory: openwrt
+        run: |
+          echo "---- find bin ----"
+          find bin -type f -maxdepth 6 -print || true
+          find . -maxdepth 3 -print || true
+          find bin -type f -maxdepth 6 -print > build-bin-listing.txt || true
+          cp build.log ../build.log || true
+
+      - name: Upload build log and listing
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: build-log
-          path: build.log
+          name: debug-log
+          path: |
+            openwrt/build.log
+            openwrt/build-bin-listing.txt
+            build.log
 
-      - name: Upload firmware
+      - name: Upload firmware artifacts (if any)
+        if: success()
         uses: actions/upload-artifact@v4
         with:
           name: firmware
