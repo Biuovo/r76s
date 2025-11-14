@@ -25,12 +25,19 @@ REQUIRED_PACKAGES=(
   "CONFIG_PACKAGE_nikki=y"
   "CONFIG_PACKAGE_luci-app-nikki=y"
   "CONFIG_PACKAGE_luci-i18n-nikki-zh-cn=y"
+  "CONFIG_PACKAGE_frp=y"
+  "CONFIG_PACKAGE_luci-app-frpc=y"
 )
 
 DOCKER_PACKAGES=(
   "CONFIG_PACKAGE_docker=y"
   "CONFIG_PACKAGE_dockerd=y"
   "CONFIG_PACKAGE_docker-compose=y"
+)
+
+TAILSCALE_PACKAGES=(
+  "CONFIG_PACKAGE_tailscale=y"
+  "CONFIG_PACKAGE_tailscaled=y"
 )
 
 if [ -f "$CFG" ]; then
@@ -59,13 +66,18 @@ done < "$BACKUP"
 grep -E '^CONFIG_BUILD|^CONFIG_TARGET' "$BACKUP" >> "$TMPCFG" || true
 
 echo "" >> "$TMPCFG"
-echo "# --- sanitized: keep nikki + docker packages ---" >> "$TMPCFG"
+echo "# --- sanitized: keep nikki + docker + frpc + tailscale packages ---" >> "$TMPCFG"
 
+# add required packages
 for p in "${REQUIRED_PACKAGES[@]}"; do
   grep -qF "$p" "$TMPCFG" || echo "$p" >> "$TMPCFG"
 done
 
 for p in "${DOCKER_PACKAGES[@]}"; do
+  grep -qF "$p" "$TMPCFG" || echo "$p" >> "$TMPCFG"
+done
+
+for p in "${TAILSCALE_PACKAGES[@]}"; do
   grep -qF "$p" "$TMPCFG" || echo "$p" >> "$TMPCFG"
 done
 
